@@ -98,17 +98,18 @@ class Deck():
         self.shuffled = True
 
 class BlackJack():
-    cards    = None
+    cards    = Deck()
     bet      = 0
     
     usrSums  = [0,0]
     usrBest  = 0
-    usrHand  = []
+    usrHand  = Deck()
 
     dlrSums  = [0,0]
-    dlrBust  = 0
-    dlrHand  = []
+    dlrBest  = 0
+    dlrHand  = Deck()
 
+    gameover = False
     result  = ""
 
     def __init__(self, msg: Message, bet = 0, init = False, hit = False):
@@ -116,47 +117,48 @@ class BlackJack():
         self.usrHand     = Deck()
         self.dlrHand     = Deck()
         self.usrSums     = [0,0]
+        self.usrBest     = 0
         self.dlrSums     = [0,0]
+        self.dlrBest     = 0
+        self.user        = msg.author
+        self.nickname    = get_nickname(self.user)
+        self.gameover    = False
 
         if init:
+        # Handle starting a game
             self.bet = bet
-            # shuffle cards
             self.fullDeck.new_shuffled_deck()
-            # deal to usr
+
             self.usrHand.cards.append(self.fullDeck.draw_card())
             self.usrHand.cards.append(self.fullDeck.draw_card())
-            # deal to dlr
             self.dlrHand.cards.append(self.fullDeck.draw_card())
             # get current hand sums
             self.usrSums = self.usrHand.bj_sum()
             self.dlrSums = self.dlrHand.bj_sum()
-            # get highest number
-            self.get_best_sums()
-
-            if self.usrBest == 21: 
-                self.stand_loop()
-            else:
-                self.result = ":hearts::diamonds: Hit or Stand?! :diamonds::hearts:"
-                set_field(msg.author, "game", self.save_game())
-                return
+            # get highest numbers
+            self.get_best_sums()            
+        else:
+        # Handle loading a game with a hit / stand
+            self.load(self.user)                   # rebuild fields from player JSON
+            self.usrSums = self.usrHand.bj_sum()
+            self.dlrSums = self.dlrHand.bj_sum()
             
+            if hit:                                 # check if player hits or stands
+                self.usrHand.cards.append(self.fullDeck.draw_card())
+                self.usrSums = self.usrHand.bj_sum()
+                self.get_best_sums()                # get highest number
+            else: 
+                self.stand_loop()
+                return
+        
+        if self.usrBest == 21: 
+            self.stand_loop()
+        elif self.usrBest > 21:
+            self.lose_game()
+        elif len(self.usrHand.cards) == 6:
+            self.win_game()
         else:
-            # rebuild fields from player JSON
-            self.load_game(msg.author)
-            #print(f"[DEBUG] : Loaded user sums {self.usrSums}")
-            #print(f"[DEBUG] : Loaded dealer sums {self.dlrSums}")
-
-            # check if player hits or stands
-            if hit: self.usrHand.cards.append(self.fullDeck.draw_card())
-            else  : self.stand_loop()
-
-        # handle a bust or tie
-        if self.gameover: 
-            self.end_game(msg.author)
-            set_field(msg.author, "game", {})
-        else:
-            set_field(msg.author, "game", self.save_game())
-            self.result = "Hit or Stand?!"
+            self.cont_game()
 
     def get_best_sums(self):
         if self.usrSums[1] < 22: self.usrBest = self.usrSums[1]
@@ -164,95 +166,90 @@ class BlackJack():
 
         if self.dlrSums[1] < 22: self.dlrBest = self.dlrSums[1]
         else:                    self.dlrBest = self.dlrSums[0]
-        
 
-    def next_state(self):
-        # Determine Game Outcome
+    def check_gameover(self):
+        self.get_best_sums()
         if self.dlrBest > 21:
-            self.result = "You Won!"
-            return
-
+            # Check if the dealer busts
+            self.win_game()
         elif self.dlrBest > self.usrBest:
-            self.result   = "Dealer Wins!"
-            return
-
+            # check if the dealer beat you
+            self.lose_game()
+        elif self.dlrBest == self.usrBest:
+            # check if you and the dealer tie
+            self.gameover = True
+            self.result   = f"Tie  :triumph: +0 NickCoin {NC}"
         else:
-            self.result = "Tie!"
-            return
+            pass
         
     def stand_loop(self):
-        self.usrSums = self.usrHand.bj_sum()
         while not self.gameover:
-            self.dlrHand.append(self.fullDeck.draw_card())
-            self.usrSums = self.usrHand.bj_sum()
-            self.usrSums = self.usrHand.bj_sum()
+            self.dlrHand.cards.append(self.fullDeck.draw_card())
+            self.dlrSums = self.dlrHand.bj_sum()
+            self.check_gameover()        
+
+    def win_game(self):
+        self.gameover = True
+        self.result = f"{self.nickname}, You Won :money_mouth: +{int(self.bet * 1.5)} NickCoin {NC}"
+        
+        profile = get_profile(self.user)
+        profile["coins"] += int(self.bet * 1.5)
+        profile["bj_record"]["w"] += 1
+        profile["net"]   += int(self.bet * 1.5)
+        set_profile(self.user, profile)
             
+    def lose_game(self):
+        self.gameover = True
+        self.result   = f"{self.nickname}, You Lost :regional_indicator_l: -{self.bet} NickCoin {NC}"
+        
+        profile = get_profile(self.user)
+        profile["coins"] -= self.bet
+        profile["bj_record"]["l"] += 1
+        profile["net"]   -= self.bet
+        set_profile(self.user, profile)
 
-    def end_game(self, auth: Member):
-        if self.usr21 and self.dlr21:
-            self.result = "Tie!"
-        if self.usrBust:
-
-            # profile = get_profile(self.user)
-            # profile["coins"] -= losses
-            # profile["craps_record"]["l"] += 1
-            # profile["net"]   -= losses
-            # set_profile(self.user, profile)
-
-            self.result = f"You Lost! -{self.bet} NickCoin {NC} :regional_indicator_l:"
-        if self.dlrBust:
-            
-            # profile = get_profile(self.user)
-            # profile["coins"] -= losses
-            # profile["craps_record"]["l"] += 1
-            # profile["net"]   -= losses
-            # set_profile(self.user, profile)
-            
-            self.result = f"You Won! +{2*self.bet} NickCoin {NC} :money_mouth:"
-
-    def load_game(self, user: Member):
-        #print("[DEBUG]: Loading Game...")
-
-        # get user info
+    def cont_game(self):
+        self.result = ":hearts::diamonds: Hit or Stand?! :diamonds::hearts:"
+        set_field(self.user, "game", self.save())
+    
+    def load(self, user: Member):
         profile = get_profile(user)
         # get current gamestate
         gameinfo = profile["game"]
         # rebuild game structure
-        self.cards.build_from_strs(gameinfo["cards"])
+        self.fullDeck.build_from_strs(gameinfo["cards"])
         self.bet = gameinfo["bet"]
-        self.usrHand = [Card(i.split("-")[0], int(i.split("-")[1])) for i in gameinfo["usrHand"]]
-        self.dlrHand = [Card(i.split("-")[0], int(i.split("-")[1])) for i in gameinfo["dlrHand"]]
+        self.usrHand.cards = [Card(i.split("-")[0], int(i.split("-")[1])) for i in gameinfo["usrHand"]]
+        self.dlrHand.cards = [Card(i.split("-")[0], int(i.split("-")[1])) for i in gameinfo["dlrHand"]]
 
-    def save_game(self):
+    def save(self):
         game = {
-                "cards": [i.formatted() for i in self.cards.cards],
-                "bet":  self.bet,
-                "usrHand": [i.formatted() for i in self.usrHand],
-                "dlrHand": [i.formatted() for i in self.dlrHand]
+                "cards"     : [card.formatted() for card in self.fullDeck.cards],
+                "bet"       :  self.bet,
+                "usrHand"   : [card.formatted() for card in self.usrHand.cards],
+                "dlrHand"   : [card.formatted() for card in self.dlrHand.cards]
                 }
         return game
 
     def get_next(self, msg: Message):
 
+        if self.gameover: set_field(msg.author, "game", {})
+
         # set user hand sum as a string
-        if self.usrSums[0] == self.usrSums[1] or self.usrSums[1] > 21:
-            usrStringSum = str(self.usrSums[0])
-        elif self.usrSums[1] == 21:
+        if self.usrSums[0] < 22 and self.usrSums[1] < 22 and (self.usrSums[0] != self.usrSums[1]):
+            usrStringSum = str(self.usrSums[0]) + " or " + str(self.usrSums[1])
+        elif self.usrSums[1] < 22:
             usrStringSum = str(self.usrSums[1])
         else:
-            usrStringSum = str(self.usrSums[0]) + " or " + str(self.usrSums[1])
-
-        #usrStringSum += f" [DEBUG] - userSums[0]: {self.usrSums[0]}  | userSums[1]: {self.usrSums[1]}"
+            usrStringSum = str(self.usrSums[0])
 
         # set dealer hand sum as a string
-        if self.dlrSums[0] == self.dlrSums[1] or self.dlrSums[1] > 21:
-            dlrStringSum = str(self.dlrSums[0])
-        elif self.dlrSums[1] == 21:
+        if self.dlrSums[0] < 22 and self.dlrSums[1] < 22 and (self.dlrSums[0] != self.dlrSums[1]):
+            dlrStringSum = str(self.dlrSums[0]) + " or " + str(self.dlrSums[1])
+        elif self.dlrSums[1] < 22:
             dlrStringSum = str(self.dlrSums[1])
         else:
-            dlrStringSum = str(self.dlrSums[0]) + " or " + str(self.dlrSums[1])
-
-        #dlrStringSum += f" [DEBUG] - dlrSums[0]: {self.dlrSums[0]}  | dlrSums[1]: {self.dlrSums[1]}"
+            dlrStringSum = str(self.dlrSums[0])
 
         # init embeded message
         embed = Embed(title = self.result, 
@@ -260,18 +257,14 @@ class BlackJack():
 
         # add dealer hand
         embed.add_field(name="Dealer's Hand:", value = dlrStringSum, inline = False)
-        for card in self.dlrHand:
+        for card in self.dlrHand.cards:
             embed.add_field(name = "▁▁▁▁▁▁▁", value = str(card), inline = True)
-        
-        if len(self.dlrHand) < 2:
+        if len(self.dlrHand.cards) < 2:
             embed.add_field(name = "▁▁▁▁▁▁▁", value = BLANK_CARD, inline = True)
 
         # add user hand
-        if msg.author.nick == None: name = str(msg.author)
-        else:                       name = msg.author.nick
-
-        embed.add_field(name=(name + "'s Hand:"), value = usrStringSum, inline = False)
-        for card in self.usrHand:
+        embed.add_field(name=(self.nickname + "'s Hand:"), value = usrStringSum, inline = False)
+        for card in self.usrHand.cards:
             embed.add_field(name = "▁▁▁▁▁▁▁", value = str(card), inline = True)
 
         return embed

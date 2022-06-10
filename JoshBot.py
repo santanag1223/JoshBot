@@ -60,10 +60,11 @@ async def on_message(msg: Message):
             c = Craps(msg, bet)
             await msg.channel.send(embed = c.get_result())
         
-        if "blackjack" in text:
+        if "blackjack" in text or "bj" in text:
             # process text
-            text = text.replace("blackjack","").strip()
-            
+            if "blackjack" in text: text = text.replace("blackjack","").strip()
+            else:                   text = text.replace("bj","").strip()
+
             # return if there isn't a bet made
             if text == "":
                 await msg.channel.send(f"You need to bet some amount of NickCoin {NC}"); return
@@ -82,12 +83,31 @@ async def on_message(msg: Message):
             await msg.channel.send(embed=bj.get_next(msg))
 
         if "hit" in text:
+
+            profile = get_profile(msg.author)
+            if len(profile["game"]) == 0:
+                await msg.channel.send("You don't have an active game, type \"!blackjack <bet>\" to play")
+                return
+            
             bj   = BlackJack(msg, hit=True)
             await msg.channel.send(embed=bj.get_next(msg))
 
         if "stand" in text:
+
+            profile = get_profile(msg.author)
+            if len(profile["game"]) == 0:
+                await msg.channel.send("You don't have an active game, type \"!blackjack <bet>\" to play")
+                return
+
             bj   = BlackJack(msg, hit=False)
             await msg.channel.send(embed=bj.get_next(msg))
+        
+        if "havesex" in text or "have sex" in text:
+            await msg.channel.send("https://tenor.com/view/morbius-morbin-time-dance-david-tennant-gif-25814621")
+            await msg.channel.send("https://tenor.com/view/morbius-morbin-time-dance-david-tennant-gif-25814621")
+            await msg.channel.send("https://tenor.com/view/morbius-morbin-time-dance-david-tennant-gif-25814621")
+            await msg.channel.send("https://tenor.com/view/morbius-morbin-time-dance-david-tennant-gif-25814621")
+            await msg.channel.send("https://tenor.com/view/morbius-morbin-time-dance-david-tennant-gif-25814621")
 
 @client.event
 async def on_connect():

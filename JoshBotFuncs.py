@@ -185,7 +185,7 @@ class Craps():
     
     def win_game(self):
 
-        winnings = int(self.bet * 1.75)
+        winnings = int(self.bet * 1.5)
 
         profile = get_profile(self.user)
         profile["coins"] += winnings

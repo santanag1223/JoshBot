@@ -1,15 +1,15 @@
 {
     "rank": "President of Anime",
-    "coins": 1200,
+    "coins": 61175,
     "clutches": 0,
     "game": {},
     "craps_record": {
-        "w": 0,
-        "l": 0
+        "w": 62,
+        "l": 57
     },
     "bj_record": {
-        "w": 0,
-        "l": 0
+        "w": 1,
+        "l": 6
     },
-    "net": 0
+    "net": 59975
 }
